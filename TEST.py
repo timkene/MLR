@@ -23,12 +23,9 @@ def load_data_from_motherduck():
         if not motherduck_token:
             st.error("MOTHERDUCK_TOKEN not found in secrets.toml. Please add it to your secrets file.")
             return None, None, None, None, None
-        
-        # Set the token in environment
-        os.environ["MOTHERDUCK_TOKEN"] = motherduck_token
 
-        # Step 2: Connect to your MotherDuck database
-        con = duckdb.connect("md:my_CIL_DB")
+        # Connect using token in the connection string
+        con = duckdb.connect(f"md:my_CIL_DB?motherduck_token={motherduck_token}")
 
         # Step 3: Query the tables and load into pandas DataFrames
         with st.spinner("Loading data from MotherDuck..."):
