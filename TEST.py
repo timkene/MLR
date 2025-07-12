@@ -18,15 +18,19 @@ st.title("MLR Analysis Dashboard")
 def load_data_from_motherduck():
     """Load data from MotherDuck with caching"""
     try:
-        # Print what's available in secrets
-        st.write("Available secrets keys:", list(st.secrets.keys()))
-
-        # Check if secret key exists before using it
-        if "MOTHERDUCK_TOKEN" not in st.secrets:
-            st.error("❌ 'MOTHERDUCK_TOKEN' not found in secrets. Check Railway Variables.")
+        # Get MotherDuck token from environment variables (Railway)
+        motherduck_token = os.environ.get("MOTHERDUCK_TOKEN")
+        
+        # Debug: Show what environment variables are available (remove in production)
+        st.write("Checking for MOTHERDUCK_TOKEN in environment...")
+        
+        if not motherduck_token:
+            st.error("❌ 'MOTHERDUCK_TOKEN' not found in environment variables.")
+            st.info("Please add MOTHERDUCK_TOKEN to your Railway project variables.")
             return None
-
-        motherduck_token = st.secrets["MOTHERDUCK"]["token"]
+        
+        # Connect using token in the connection string
+        con = duckdb.connect(f"md:my_CIL_DB?motherduck_token={motherduck_token}")
 
 
         # Connect using token in the connection string
