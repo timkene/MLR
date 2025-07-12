@@ -21,9 +21,6 @@ def load_data_from_motherduck():
         # Get MotherDuck token from environment variables (Railway)
         motherduck_token = os.environ.get("MOTHERDUCK_TOKEN")
         
-        # Debug: Show what environment variables are available (remove in production)
-        st.write("Checking for MOTHERDUCK_TOKEN in environment...")
-        
         if not motherduck_token:
             st.error("❌ 'MOTHERDUCK_TOKEN' not found in environment variables.")
             st.info("Please add MOTHERDUCK_TOKEN to your Railway project variables.")
