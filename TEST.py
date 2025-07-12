@@ -18,6 +18,8 @@ st.title("MLR Analysis Dashboard")
 def load_data_from_motherduck():
     """Load data from MotherDuck with caching"""
     try:
+        st.write("Available secrets keys:", list(st.secrets.keys()))
+
         # Step 1: Get MotherDuck token from Railway secrets
         motherduck_token = st.secrets["MOTHERDUCK"]["token"]
         if not motherduck_token:
