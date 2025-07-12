@@ -21,7 +21,7 @@ def load_data_from_motherduck():
         st.write("Available secrets keys:", list(st.secrets.keys()))
 
         # Step 1: Get MotherDuck token from Railway secrets
-        motherduck_token = st.secrets["MOTHERDUCK"]["token"]
+        motherduck_token = st.secrets["MOTHERDUCK_TOKEN"]
         if not motherduck_token:
             st.error("MOTHERDUCK_TOKEN not found in secrets.toml. Please add it to your secrets file.")
             return None, None, None, None, None
