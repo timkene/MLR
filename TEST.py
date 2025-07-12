@@ -26,7 +26,8 @@ def load_data_from_motherduck():
             st.error("❌ 'MOTHERDUCK_TOKEN' not found in secrets. Check Railway Variables.")
             return None
 
-        motherduck_token = st.secrets["MOTHERDUCK_TOKEN"]
+        motherduck_token = st.secrets["MOTHERDUCK"]["token"]
+
 
         # Connect using token in the connection string
         con = duckdb.connect(f"md:my_CIL_DB?motherduck_token={motherduck_token}")
