@@ -18,13 +18,15 @@ st.title("MLR Analysis Dashboard")
 def load_data_from_motherduck():
     """Load data from MotherDuck with caching"""
     try:
+        # Print what's available in secrets
         st.write("Available secrets keys:", list(st.secrets.keys()))
 
-        # Step 1: Get MotherDuck token from Railway secrets
+        # Check if secret key exists before using it
+        if "MOTHERDUCK_TOKEN" not in st.secrets:
+            st.error("❌ 'MOTHERDUCK_TOKEN' not found in secrets. Check Railway Variables.")
+            return None
+
         motherduck_token = st.secrets["MOTHERDUCK_TOKEN"]
-        if not motherduck_token:
-            st.error("MOTHERDUCK_TOKEN not found in secrets.toml. Please add it to your secrets file.")
-            return None, None, None, None, None
 
         # Connect using token in the connection string
         con = duckdb.connect(f"md:my_CIL_DB?motherduck_token={motherduck_token}")
