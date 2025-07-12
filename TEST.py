@@ -216,24 +216,27 @@ if __name__ == "__main__":
                 st.warning("No Claims MLR data available to display.")
                 high_mlr_claims_companies = []
             
-            # Display companies with high MLR
+            # Display companies with high MLR in a table, ignoring any None values
             st.subheader("🚨 Companies with MLR > 75%")
-            
+
+            # Remove None values from the lists
+            high_mlr_pa_companies = [c for c in high_mlr_pa_companies if c is not None]
+            high_mlr_claims_companies = [c for c in high_mlr_claims_companies if c is not None]
+
             if high_mlr_pa_companies or high_mlr_claims_companies:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("**PA MLR > 75%:**")
-                    if high_mlr_pa_companies:
-                        for company in high_mlr_pa_companies:
-                            st.markdown(f"• {company}")
-                
-                with col2:
-                    st.markdown("**Claims MLR > 75%:**")
-                    if high_mlr_claims_companies:
-                        for company in high_mlr_claims_companies:
-                            st.markdown(f"• {company}")
-            else:
+                import pandas as pd
+
+                # Prepare data for the table
+                max_len = max(len(high_mlr_pa_companies), len(high_mlr_claims_companies))
+                pa_list = high_mlr_pa_companies + [""] * (max_len - len(high_mlr_pa_companies))
+                claims_list = high_mlr_claims_companies + [""] * (max_len - len(high_mlr_claims_companies))
+
+                table_df = pd.DataFrame({
+                    "PA MLR > 75%": pa_list,
+                    "Claims MLR > 75%": claims_list
+                })
+
+                st.dataframe(table_df, use_container_width=True)
                 st.success("✅ No companies have MLR > 75%")
         else:
             st.warning("No MLR data available to display.")
