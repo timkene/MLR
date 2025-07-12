@@ -103,7 +103,7 @@ def calculate_mlr(PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT):
         # --- Merge Results ---
         debit_df = pl.from_pandas(DEBIT_BY_CLIENT.rename(columns={'amount': 'Total cost(DEBIT_BY_CLIENT)'}))
         pa_df = PA_mlr.rename({'Total cost': 'Total cost(PA)'}).with_columns(
-            (pl.col('Total cost(PA)') * 0.4).round(2).alias('PA40%')
+            (pl.col('Total cost(PA)') * 1.4).round(2).alias('PA40%')
         )
         claims_df = claims_mlr.rename({'Total cost': 'Total cost(claims)'})
 
