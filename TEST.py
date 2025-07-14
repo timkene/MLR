@@ -36,10 +36,10 @@ def load_data_from_motherduck():
         # Step 3: Query the tables and load into pandas DataFrames
         with st.spinner("Loading data from MotherDuck..."):
             GROUP_CONTRACT = con.execute("SELECT * FROM my_dataset.group_contract").fetchdf()
-            CLAIMS = con.execute("SELECT * FROM my_dataset.claims").fetchdf()
-            GROUPS = con.execute("SELECT * FROM my_dataset.all_group").fetchdf()
-            DEBIT = con.execute("SELECT * FROM my_dataset.debit_note").fetchdf()
-            PA = con.execute("SELECT * FROM my_dataset.total_pa_procedures").fetchdf()
+            CLAIMS = con.execute("SELECT * FROM dashboard_data.claims").fetchdf()
+            GROUPS = con.execute("SELECT * FROM dashboard_data.all_group").fetchdf()
+            DEBIT = con.execute("SELECT * FROM dashboard_data.debit_note").fetchdf()
+            PA = con.execute("SELECT * FROM dashboard_data.total_pa_procedures").fetchdf()
             
             # Convert to Polars DataFrames
             GROUP_CONTRACT = pl.from_pandas(GROUP_CONTRACT)
