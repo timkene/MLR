@@ -35,7 +35,7 @@ def load_data_from_motherduck():
 
         # Step 3: Query the tables and load into pandas DataFrames
         with st.spinner("Loading data from MotherDuck..."):
-            GROUP_CONTRACT = con.execute("SELECT * FROM my_dataset.group_contract").fetchdf()
+            GROUP_CONTRACT = con.execute("SELECT * FROM dashboard_data.group_contract").fetchdf()
             CLAIMS = con.execute("SELECT * FROM dashboard_data.claims").fetchdf()
             GROUPS = con.execute("SELECT * FROM dashboard_data.all_group").fetchdf()
             DEBIT = con.execute("SELECT * FROM dashboard_data.debit_note").fetchdf()
