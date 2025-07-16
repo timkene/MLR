@@ -94,20 +94,35 @@ def calculate_mlr(PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT):
             pl.col('approvedamount').sum().alias('Total cost')
         ).sort('Total cost', descending=True)
 
-        # --- DEBIT NOTE (last 12 months) ---
-        today = pd.Timestamp.today().normalize()
-        first_of_month_12_months_ago = (today.replace(day=1) - pd.DateOffset(months=12)).replace(day=1)
+        # --- DEBIT NOTE (filtered by contract dates) ---
         # Ensure DEBIT is pandas DataFrame for filtering
         if not isinstance(DEBIT, pd.DataFrame):
             DEBIT = DEBIT.to_pandas()
+        
+        # Convert date column and filter out rows containing "tpa" in description
         DEBIT['from'] = pd.to_datetime(DEBIT['from'])
-        CURRENT_DEBIT = DEBIT[(DEBIT['from'] >= first_of_month_12_months_ago) & (DEBIT['from'] <= today)]
-        DEBIT_BY_CLIENT = CURRENT_DEBIT.groupby('company_name', as_index=False)['amount'].sum()
-        DEBIT_BY_CLIENT = DEBIT_BY_CLIENT.rename(columns={'company_name': 'groupname'})
-        DEBIT_BY_CLIENT = DEBIT_BY_CLIENT.sort_values('amount', ascending=False)
+        CURRENT_DEBIT = DEBIT[~DEBIT['description'].str.contains('tpa', case=False, na=False)]
+        
+        # Change company_name to groupname for consistency
+        CURRENT_DEBIT = CURRENT_DEBIT.rename(columns={'company_name': 'groupname'})
+        
+        # Convert to polars for joining with contract dates
+        current_debit_pl = pl.from_pandas(CURRENT_DEBIT)
+        
+        # Join with contract dates and filter by contract period
+        debit_with_dates = current_debit_pl.join(
+            group_contract_dates, on='groupname', how='inner'
+        ).filter(
+            (pl.col('from') >= pl.col('startdate')) & (pl.col('from') <= pl.col('enddate'))
+        )
+        
+        # Group by company and sum amounts within contract period
+        DEBIT_BY_CLIENT = debit_with_dates.group_by('groupname').agg(
+            pl.col('amount').sum().alias('amount')
+        ).sort('amount', descending=True)
 
         # --- Merge Results ---
-        debit_df = pl.from_pandas(DEBIT_BY_CLIENT.rename(columns={'amount': 'Total cost(DEBIT_BY_CLIENT)'}))
+        debit_df = DEBIT_BY_CLIENT.rename({'amount': 'Total cost(DEBIT_BY_CLIENT)'})
         pa_df = PA_mlr.rename({'Total cost': 'Total cost(PA)'}).with_columns(
             (pl.col('Total cost(PA)') * 1.4).round(2).alias('PA40%')
         )
