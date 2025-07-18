@@ -413,7 +413,6 @@ if __name__ == "__main__":
             high_mlr_claims_companies = [c for c in high_mlr_claims_companies if c is not None]
 
             if high_mlr_pa_companies or high_mlr_claims_companies:
-                import pandas as pd
 
                 # Prepare data for the table
                 max_len = max(len(high_mlr_pa_companies), len(high_mlr_claims_companies))
