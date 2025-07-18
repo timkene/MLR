@@ -29,10 +29,6 @@ def load_data_from_motherduck():
         # Connect using token in the connection string
         con = duckdb.connect(f"md:my_CIL_DB?motherduck_token={motherduck_token}")
 
-
-        # Connect using token in the connection string
-        con = duckdb.connect(f"md:my_CIL_DB?motherduck_token={motherduck_token}")
-
         # Step 3: Query the tables and load into pandas DataFrames
         with st.spinner("Loading data from MotherDuck..."):
             GROUP_CONTRACT = con.execute("SELECT * FROM clearline_db.group_contract").fetchdf()
@@ -44,7 +40,6 @@ def load_data_from_motherduck():
             M_PLAN = con.execute("SELECT * FROM clearline_db.member_plans").fetchdf()
             G_PLAN = con.execute("SELECT * FROM clearline_db.group_plan").fetchdf()
             PLAN = con.execute("SELECT * FROM clearline_db.plans").fetchdf()
-            
             
             # Convert to Polars DataFrames
             GROUP_CONTRACT = pl.from_pandas(GROUP_CONTRACT)
@@ -295,7 +290,7 @@ def calculate_retail_mlr(PA, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, GROUPS, PLAN):
             pl.col("groupname").str.to_lowercase() == "family scheme"
         )
 
-       # Join PLAN to PAA to get 'planname' into PAA using 'planid'
+        # Join PLAN to PAA to get 'planname' into PAA using 'planid'
         if 'planid' in PAA.columns and 'planid' in PLAN.columns:
             PAA = PAA.join(
                 PLAN.select(['planid', 'planname']),
@@ -431,39 +426,36 @@ if __name__ == "__main__":
                 })
 
                 st.dataframe(table_df, use_container_width=True)
+            else:
                 st.success("✅ No companies have MLR > 75%")
         else:
             st.warning("No MLR data available to display.")
 
         # --- Retail MLR Section ---
-            st.subheader("Retail MLR Analysis Results")
-            try:
-                # Call the retail MLR calculation function
-                result_df, merged_plan_df = calculate_retail_mlr(
-                    PA, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, GROUPS, PLAN
-                )
+        st.subheader("Retail MLR Analysis Results")
+        try:
+            # Call the retail MLR calculation function
+            result_df, merged_plan_df = calculate_retail_mlr(
+                PA, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, GROUPS, PLAN
+            )
 
-                # Display result_df
-                st.markdown("**Retail MLR - Individual/Plan Breakdown**")
-                if result_df is not None and result_df.height > 0:
-                    st.dataframe(result_df.to_pandas(), use_container_width=True)
-                else:
-                    st.info("No retail MLR (result_df) data available.")
+            # Display result_df
+            st.markdown("**Retail MLR - Individual/Plan Breakdown**")
+            if result_df is not None and result_df.height > 0:
+                st.dataframe(result_df.to_pandas(), use_container_width=True)
+            else:
+                st.info("No retail MLR (result_df) data available.")
 
-                # Display total_retail_premium_by_plan
-                st.markdown("**Total Retail Premium by Plan**")
-                if merged_plan_df is not None and merged_plan_df.height > 0:
-                    st.dataframe(merged_plan_df.to_pandas(), use_container_width=True)
-                else:
-                    st.info("No retail premium by plan data available.")
-            except Exception as e:
-                st.error(f"Error displaying retail MLR tables: {str(e)}")
-        else:
-            st.error("Failed to load required data. Please check your connection and try again.")
+            # Display total_retail_premium_by_plan
+            st.markdown("**Total Retail Premium by Plan**")
+            if merged_plan_df is not None and merged_plan_df.height > 0:
+                st.dataframe(merged_plan_df.to_pandas(), use_container_width=True)
+            else:
+                st.info("No retail premium by plan data available.")
+        except Exception as e:
+            st.error(f"Error displaying retail MLR tables: {str(e)}")
     else:
-        st.error("Failed to load data. Please check your connection and try again.")
-    else:
-        st.error("Failed to load data. Please check your connection and try again.")
+        st.error("Failed to load required data. Please check your connection and try again.")
 
 
 
