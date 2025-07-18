@@ -40,6 +40,11 @@ def load_data_from_motherduck():
             GROUPS = con.execute("SELECT * FROM clearline_db.all_group").fetchdf()
             DEBIT = con.execute("SELECT * FROM clearline_db.debit_note").fetchdf()
             PA = con.execute("SELECT * FROM clearline_db.total_pa_procedures").fetchdf()
+            ACTIVE_ENROLLEE = con.execute("SELECT * FROM clearline_db.all_active_member").fetchdf()
+            M_PLAN = con.execute("SELECT * FROM clearline_db.member_plans").fetchdf()
+            G_PLAN = con.execute("SELECT * FROM clearline_db.group_plan").fetchdf()
+            PLAN = con.execute("SELECT * FROM clearline_db.plans").fetchdf()
+            
             
             # Convert to Polars DataFrames
             GROUP_CONTRACT = pl.from_pandas(GROUP_CONTRACT)
@@ -47,13 +52,17 @@ def load_data_from_motherduck():
             GROUPS = pl.from_pandas(GROUPS)
             DEBIT = pl.from_pandas(DEBIT)
             PA = pl.from_pandas(PA)
+            ACTIVE_ENROLLEE = pl.from_pandas(ACTIVE_ENROLLEE)
+            M_PLAN = pl.from_pandas(M_PLAN)
+            G_PLAN = pl.from_pandas(G_PLAN)
+            PLAN = pl.from_pandas(PLAN)
             
         con.close()
-        return PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT
+        return PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, PLAN
         
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None
 
 def calculate_mlr(PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT):
     """Calculate MLR metrics"""
@@ -179,12 +188,182 @@ def calculate_mlr(PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT):
         st.error(f"Error calculating MLR: {str(e)}")
         return pl.DataFrame(), pl.DataFrame()
 
+def calculate_retail_mlr(PA, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, GROUPS, PLAN):
+    try:
+        # Ensure consistent data types
+        ACTIVE_ENROLLEE = ACTIVE_ENROLLEE.with_columns([
+            pl.col("legacycode").cast(pl.Utf8),
+            pl.col("memberid").cast(pl.Int64)
+        ])
+
+        M_PLAN = M_PLAN.with_columns([
+            pl.col("memberid").cast(pl.Int64),
+            pl.col("planid").cast(pl.Int64),
+            pl.col("iscurrent").cast(pl.Utf8)
+        ])
+
+        G_PLAN = G_PLAN.with_columns([
+            pl.col("planid").cast(pl.Int64),
+            pl.col("groupid").cast(pl.Int64),
+            pl.col("individualprice").cast(pl.Float64),
+            pl.col("familyprice").cast(pl.Float64),
+            pl.col("maxnumdependant").cast(pl.Int64)
+        ])
+
+        PA = PA.with_columns([
+            pl.col("requestdate").cast(pl.Datetime),
+            pl.col("iid").cast(pl.Utf8),
+            pl.col("granted").cast(pl.Float64)
+        ])
+
+        GROUPS = GROUPS.with_columns([
+            pl.col("groupid").cast(pl.Int64),
+            pl.col("groupname").cast(pl.Utf8)
+        ])
+
+        # Filter current plans
+        M_PLANN = M_PLAN.filter(pl.col("iscurrent") == "true")
+        PAA = PA.with_columns(pl.col("requestdate").dt.year().alias("year"))
+
+        # Join with group names
+        G_PLANN = G_PLAN.join(
+            GROUPS.select(['groupid', 'groupname']),
+            on='groupid',
+            how='left'
+        )
+        # Filter G_PLANN to only include rows where groupname is 'FAMILY SCHEME' (case-insensitive)
+        G_PLANN = G_PLANN.filter(
+            pl.col("groupname").str.to_lowercase() == "family scheme"
+        )
+
+        # Isolate all unique planid in G_PLANN
+        unique_planids = G_PLANN.select("planid").unique()
+
+        # Filter ACTIVE_ENROLLEE to only contain data where their planid is inside the isolated planids of G_PLANN
+        # First, ensure ACTIVE_ENROLLEE has planid column (join if necessary)
+        if 'planid' in ACTIVE_ENROLLEE.columns:
+            ACTIVE_ENROLLEE = ACTIVE_ENROLLEE.drop('planid')
+        ACTIVE_ENROLLEE = ACTIVE_ENROLLEE.join(
+            M_PLANN.select(['memberid', 'planid']),
+            on='memberid',
+            how='left'
+        )
+        # Now filter ACTIVE_ENROLLEE to only those with planid in unique_planids
+        ACTIVE_RETAIL = ACTIVE_ENROLLEE.join(
+            unique_planids,
+            on="planid",
+            how="inner"
+        )
+
+        # Merge G_PLANN and PLAN to get 'planname' into G_PLANN using 'planid' as common column
+        if 'planid' in G_PLANN.columns and 'planid' in PLAN.columns:
+            F_GPLAN = G_PLANN.join(
+                PLAN.select(['planid', 'planname']),
+                on='planid',
+                how='left'
+            )
+        else:
+            F_GPLAN = G_PLANN
+
+        # Create a new column 'premium' for each row: (individualprice * countofindividual + countoffamily * familyprice)
+        FG_PLANN = F_GPLAN.with_columns(
+            (pl.col("individualprice") * pl.col("countofindividual") + pl.col("countoffamily") * pl.col("familyprice")).alias("premium")
+        )
+        # Calculate total retail premium as the sum of the 'premium' column
+        # Group by 'planname' and sum 'premium' for each planname
+        total_retail_premium_by_plan = FG_PLANN.group_by("planname").agg(
+            pl.col("premium").sum().alias("total_premium")
+        )
+
+        # Join with ACTIVE_ENROLLEE
+        PA_M = PA.join(
+            ACTIVE_ENROLLEE.select(['legacycode', 'memberid']),
+            left_on='iid',
+            right_on='legacycode',
+            how='left'
+        )
+
+        # Join with M_PLANN
+        PA_MP = PA_M.join(
+            M_PLANN.select(['memberid', 'planid']),
+            on='memberid',
+            how='left'
+        )
+
+        # Filter PA to only include rows where groupname is 'family scheme' (case-insensitive)
+        PAA = PA_MP.filter(
+            pl.col("groupname").str.to_lowercase() == "family scheme"
+        )
+
+       # Join PLAN to PAA to get 'planname' into PAA using 'planid'
+        if 'planid' in PAA.columns and 'planid' in PLAN.columns:
+            PAA = PAA.join(
+                PLAN.select(['planid', 'planname']),
+                on='planid',
+                how='left'
+            )
+
+        # Join PAA with ACTIVE_ENROLLEE to get effectivedate and terminationdate for each iid
+        if 'iid' in PAA.columns and 'legacycode' in ACTIVE_ENROLLEE.columns:
+            PAA = PAA.join(
+                ACTIVE_ENROLLEE.select(['legacycode', 'effectivedate', 'terminationdate']),
+                left_on='iid',
+                right_on='legacycode',
+                how='left'
+            )
+
+        # Filter PAA to only include claims within the customer's active period
+        # This is the key step that was missing in your original code
+        if all(col in PAA.columns for col in ['iid', 'planname', 'granted', 'requestdate', 'effectivedate', 'terminationdate']):
+            # Filter claims to only those within the customer's active enrollment period
+            filtered_PAA = PAA.filter(
+                (pl.col('requestdate') >= pl.col('effectivedate')) & 
+                (pl.col('requestdate') <= pl.col('terminationdate'))
+            )
+            
+            # Now group by IID and planname, and sum the granted amounts
+            grouped_PAA = filtered_PAA.group_by(['iid', 'planname']).agg(
+                pl.col('granted').sum().alias('total_cost')
+            )
+            
+            # Select final columns: IID (or legacycode), total_cost, planname
+            result_df = grouped_PAA.select(['iid', 'total_cost', 'planname'])
+        else:
+            grouped_PAA = pl.DataFrame()
+
+        # Group result_df by planname and sum total_cost
+        total_cost_by_plan = result_df.group_by('planname').agg(
+            pl.col('total_cost').sum().alias('total_cost')
+        )
+
+        # Ensure 'planname' is string type in both DataFrames before merging
+        if 'planname' in total_retail_premium_by_plan.columns and 'planname' in total_cost_by_plan.columns:
+            total_retail_premium_by_plan = total_retail_premium_by_plan.with_columns(
+                pl.col('planname').cast(pl.Utf8)
+            )
+            total_cost_by_plan = total_cost_by_plan.with_columns(
+                pl.col('planname').cast(pl.Utf8)
+            )
+            merged_plan_df = total_retail_premium_by_plan.join(
+                total_cost_by_plan,
+                on='planname',
+                how='left'
+            )
+        else:
+            merged_plan_df = pl.DataFrame()
+
+        return result_df, merged_plan_df
+
+    except Exception as e:
+        st.error(f"Error calculating MLR: {str(e)}")
+        return pl.DataFrame(), pl.DataFrame()
+
 # Main Streamlit app
 if __name__ == "__main__":
     # Load data
-    PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT = load_data_from_motherduck()
+    PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, PLAN = load_data_from_motherduck()
     
-    if all(df is not None for df in [PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT]):
+    if all(df is not None for df in [PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, PLAN]):
         # Calculate MLR
         pa_merged, claims_merged = calculate_mlr(PA, GROUP_CONTRACT, CLAIMS, GROUPS, DEBIT)
         
@@ -255,6 +434,34 @@ if __name__ == "__main__":
                 st.success("✅ No companies have MLR > 75%")
         else:
             st.warning("No MLR data available to display.")
+
+        # --- Retail MLR Section ---
+            st.subheader("Retail MLR Analysis Results")
+            try:
+                # Call the retail MLR calculation function
+                result_df, merged_plan_df = calculate_retail_mlr(
+                    PA, ACTIVE_ENROLLEE, M_PLAN, G_PLAN, GROUPS, PLAN
+                )
+
+                # Display result_df
+                st.markdown("**Retail MLR - Individual/Plan Breakdown**")
+                if result_df is not None and result_df.height > 0:
+                    st.dataframe(result_df.to_pandas(), use_container_width=True)
+                else:
+                    st.info("No retail MLR (result_df) data available.")
+
+                # Display total_retail_premium_by_plan
+                st.markdown("**Total Retail Premium by Plan**")
+                if merged_plan_df is not None and merged_plan_df.height > 0:
+                    st.dataframe(merged_plan_df.to_pandas(), use_container_width=True)
+                else:
+                    st.info("No retail premium by plan data available.")
+            except Exception as e:
+                st.error(f"Error displaying retail MLR tables: {str(e)}")
+        else:
+            st.error("Failed to load required data. Please check your connection and try again.")
+    else:
+        st.error("Failed to load data. Please check your connection and try again.")
     else:
         st.error("Failed to load data. Please check your connection and try again.")
 
