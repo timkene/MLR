@@ -1,0 +1,23 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Log in to Docker Hub
+        run: echo "dckr_pat_URockxw0LZZX0NzkgMkCxacE9Kc" | docker login -u "virtualflux" --password-stdin
+
+      - name: Build Docker Image
+        run: docker build . -t virtualflux/clearline-streamlit:${{ github.ref_name }}
+
+      - name: Push Docker Image to Registry
+        run: docker push virtualflux/clearline-streamlit:${{ github.ref_name }}
